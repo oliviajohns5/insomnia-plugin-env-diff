@@ -122,10 +122,21 @@ function summarize(findings) {
   return findings.reduce((acc, f) => { acc[f.severity] = (acc[f.severity] || 0) + 1; return acc; }, { high: 0, medium: 0, low: 0 });
 }
 
-function makeMarkdown(findings) {
+function makeKeyMatrix(rawExport) {
+  const envs = collectEnvironments(parseExport(rawExport));
+  const keys = Array.from(new Set(envs.flatMap(e => Object.keys(e.flat)))).sort();
+  if (!envs.length || !keys.length) return '';
+  const header = `| Key | ${envs.map(e => e.name).join(' | ')} |`;
+  const sep = `|---|${envs.map(() => '---').join('|')}|`;
+  const rows = keys.map(key => `| ${key.replace(/\|/g, '\\|')} | ${envs.map(e => Object.prototype.hasOwnProperty.call(e.flat, key) ? 'yes' : 'missing').join(' | ')} |`);
+  return [header, sep].concat(rows).join('\n');
+}
+
+function makeMarkdown(findings, rawExport) {
   const counts = summarize(findings);
   const rows = findings.map(f => `| ${f.severity} | ${f.type} | ${f.location} | ${f.message} | ${String(f.preview).replace(/\|/g, '\\|')} |`).join('\n');
-  return `# Insomnia Env Diff Report\n\nGenerated: ${new Date().toISOString()}\n\nLocal-only report. Secret-like values are redacted.\n\n## Summary\n\n- High: ${counts.high}\n- Medium: ${counts.medium}\n- Low: ${counts.low}\n\n## Findings\n\n| Severity | Type | Location | Message | Preview |\n|---|---|---|---|---|\n${rows || '| low | none | workspace.environments | No environment drift detected. |  |'}\n`;
+  const matrix = rawExport ? makeKeyMatrix(rawExport) : '';
+  return `# Insomnia Env Diff Report\n\nGenerated: ${new Date().toISOString()}\n\nLocal-only report. Secret-like values are redacted.\n\n## Summary\n\n- Compared keys: ${matrix ? matrix.split('\n').length - 2 : 0}\n- High: ${counts.high}\n- Medium: ${counts.medium}\n- Low: ${counts.low}\n\n## Key Matrix\n\n${matrix || 'No environment keys found.'}\n\n## Findings\n\n| Severity | Type | Location | Message | Preview |\n|---|---|---|---|---|\n${rows || '| low | none | workspace.environments | No environment drift detected. |  |'}\n`;
 }
 
 async function getWritableExportPath(context, fileName) {
@@ -145,7 +156,7 @@ const action = {
   icon: 'fa-code-compare',
   action: async (context) => {
     const raw = await context.data.export.insomnia({ includePrivate: false, format: 'json' });
-    const report = makeMarkdown(diffEnvironments(raw));
+    const report = makeMarkdown(diffEnvironments(raw), raw);
     const fs = require('fs');
     let output = null;
     if (context.app && typeof context.app.showSaveDialog === 'function') output = await context.app.showSaveDialog({ defaultPath: 'insomnia-env-diff.md' });
@@ -158,4 +169,4 @@ const action = {
 module.exports.workspaceActions = [action];
 module.exports.requestGroupActions = [action];
 module.exports.requestActions = [action];
-module.exports.__test = { collectEnvironments, diffEnvironments, flatten, getWritableExportPath, hostOf, makeMarkdown, parseExport, redactValue, summarize };
+module.exports.__test = { collectEnvironments, diffEnvironments, flatten, getWritableExportPath, hostOf, makeKeyMatrix, makeMarkdown, parseExport, redactValue, summarize };

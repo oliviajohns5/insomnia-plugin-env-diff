@@ -1,22 +1,49 @@
 {
   "name": "insomnia-plugin-env-diff",
-  "version": "1.0.0",
-  "description": "Local-only Insomnia environment diff reports: missing keys, URL drift, prod/dev mismatches, duplicate names, and redacted secret hygiene.",
+  "version": "1.0.1",
+  "description": "Local-only Insomnia environment diff reports with key matrix, missing keys, URL drift, prod/dev mismatches, and redacted secret hygiene.",
   "main": "main.js",
   "license": "MIT",
   "author": "oliviajohns5",
-  "repository": { "type": "git", "url": "git+https://github.com/oliviajohns5/insomnia-plugin-env-diff.git" },
-  "bugs": { "url": "https://github.com/oliviajohns5/insomnia-plugin-env-diff/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oliviajohns5/insomnia-plugin-env-diff.git"
+  },
+  "bugs": {
+    "url": "https://github.com/oliviajohns5/insomnia-plugin-env-diff/issues"
+  },
   "homepage": "https://github.com/oliviajohns5/insomnia-plugin-env-diff#readme",
-  "keywords": ["insomnia", "insomnia-plugin", "environment-diff", "env-diff", "api-quality", "redaction"],
-  "files": ["main.js", "README.md", "LICENSE", "icon.svg", "cover.svg"],
-  "scripts": { "test": "node test.js", "test:packaged": "node qa-packaged.js", "pack:dry": "npm pack --dry-run" },
+  "keywords": [
+    "insomnia",
+    "insomnia-plugin",
+    "environment-diff",
+    "env-diff",
+    "api-quality",
+    "redaction"
+  ],
+  "files": [
+    "main.js",
+    "README.md",
+    "LICENSE",
+    "icon.svg",
+    "cover.svg"
+  ],
+  "scripts": {
+    "test": "node test.js",
+    "test:packaged": "node qa-packaged.js",
+    "pack:dry": "npm pack --dry-run"
+  },
   "insomnia": {
     "name": "env-diff",
     "displayName": "Env Diff",
     "description": "Exports a local redacted report comparing Insomnia environments for missing keys, URL drift, prod/dev mismatches, duplicate names, and secret hygiene.",
-    "images": { "icon": "icon.svg", "cover": "cover.svg" },
-    "publisher": { "name": "oliviajohns5" },
+    "images": {
+      "icon": "icon.svg",
+      "cover": "cover.svg"
+    },
+    "publisher": {
+      "name": "oliviajohns5"
+    },
     "unlisted": false
   },
   "devDependencies": {}

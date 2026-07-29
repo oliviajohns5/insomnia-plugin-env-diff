@@ -29,8 +29,11 @@ async function main() {
   const findings = t.diffEnvironments(workspace);
   const types = new Set(findings.map(f => f.type));
   for (const expected of ['missing-key', 'same-value', 'short-secret', 'empty-secret', 'dev-points-to-prod', 'prod-points-to-dev', 'duplicate-environment-name']) assert(types.has(expected), expected);
-  const report = t.makeMarkdown(findings);
+  const report = t.makeMarkdown(findings, workspace);
   assert(report.includes('# Insomnia Env Diff Report'));
+  assert(report.includes('## Key Matrix'));
+  assert(report.includes('| base_url |'));
+  assert(t.makeKeyMatrix(workspace).includes('missing'));
   assert(report.includes('| Severity | Type | Location | Message | Preview |'));
   assert(!report.includes('shortsecretlongvalue'));
   const clean = t.diffEnvironments(JSON.stringify({ resources: [{ _type: 'environment', name: 'Dev', data: { base_url: 'https://dev.example.com' } }, { _type: 'environment', name: 'Prod', data: { base_url: 'https://prod.example.com' } }] }));

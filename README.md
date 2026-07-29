@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/insomnia-plugin-env-diff.svg)](https://www.npmjs.com/package/insomnia-plugin-env-diff)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Local-only environment comparison for Insomnia.
+Local-only environment comparison for Insomnia. v1.0.1 adds a key matrix so missing environment variables are obvious at a glance.
 
 Env Diff exports a redacted Markdown report showing environment drift: missing keys, prod/dev URL mismatches, duplicate environment names, empty or short secret-like values, and suspicious same values across environments.
 
@@ -13,6 +13,7 @@ API teams often keep Base, Dev, Staging, and Production environments in one work
 
 ## Features
 
+- Adds a key matrix across all environments
 - Compares all Insomnia environments in the workspace
 - Flags keys missing from one or more environments
 - Flags dev/staging environments pointing at production-like hosts
