@@ -82,6 +82,43 @@ function collectEnvironmentLikesFromModels(models) {
   return found;
 }
 
+
+
+function promptedEnvironmentsFromText(text) {
+  const trimmed = safeString(text).trim();
+  if (!trimmed) return [];
+  let parsed;
+  try { parsed = JSON.parse(trimmed); } catch { return []; }
+  const envs = [];
+  const pushEnv = (name, data) => {
+    if (data && typeof data === 'object' && !Array.isArray(data)) envs.push({ _type: 'environment', name: safeString(name || `Pasted Environment ${envs.length + 1}`), data });
+  };
+  if (Array.isArray(parsed)) {
+    parsed.forEach((item, i) => {
+      if (isEnvironment(item)) pushEnv(item.name || item._id || `Pasted Environment ${i + 1}`, item.data || {});
+      else if (item && typeof item === 'object' && !Array.isArray(item)) pushEnv(item.name || `Pasted Environment ${i + 1}`, item.data && typeof item.data === 'object' ? item.data : item);
+    });
+    return envs;
+  }
+  if (isEnvironment(parsed)) return [{ _type: 'environment', name: safeString(parsed.name || 'Pasted Environment'), data: parsed.data || {} }];
+  const values = Object.values(parsed);
+  if (values.length && values.every(v => v && typeof v === 'object' && !Array.isArray(v))) {
+    for (const [name, data] of Object.entries(parsed)) pushEnv(name, data);
+    return envs;
+  }
+  pushEnv('Pasted Environment', parsed);
+  return envs;
+}
+
+function mergeSyntheticEnvironments(rawExport, envs) {
+  if (!envs || !envs.length) return rawExport;
+  const parsed = parseExport(rawExport);
+  const merged = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.assign({}, parsed) : { originalExport: parsed };
+  const existing = Array.isArray(merged.resources) ? merged.resources : [];
+  merged.resources = existing.concat(envs);
+  return JSON.stringify(merged);
+}
+
 function buildActionExport(rawExport, context, models) {
   const parsed = parseExport(rawExport);
   const diagnostics = exportDiagnostics(rawExport, parsed);
@@ -204,7 +241,17 @@ const action = {
   action: async (context, models) => {
     const raw = await context.data.export.insomnia({ includePrivate: false, format: 'json' });
     const built = buildActionExport(raw, context, models);
-    const report = makeMarkdown(diffEnvironments(built.raw, { diagnostics: built.diagnostics }), built.raw);
+    let reportRaw = built.raw;
+    if (!collectEnvironments(parseExport(reportRaw)).length && context.app && typeof context.app.prompt === 'function') {
+      const pasted = await context.app.prompt('Env Diff: paste environment JSON', {
+        label: 'Insomnia did not expose environments. Paste environment JSON or {"Dev":{...},"Prod":{...}} to diff. Leave blank to export diagnostics only.',
+        defaultValue: '{"Dev":{"base_url":"https://api.production.example.com","api_key":"short","shared":"same"},"Prod":{"base_url":"https://api.dev.example.com","shared":"same","client_secret":""}}',
+        submitName: 'Use JSON',
+        cancelable: true,
+      });
+      reportRaw = mergeSyntheticEnvironments(reportRaw, promptedEnvironmentsFromText(pasted));
+    }
+    const report = makeMarkdown(diffEnvironments(reportRaw, { diagnostics: built.diagnostics }), reportRaw);
     const fs = require('fs');
     let output = null;
     if (context.app && typeof context.app.showSaveDialog === 'function') output = await context.app.showSaveDialog({ defaultPath: 'insomnia-env-diff.md' });
@@ -217,4 +264,4 @@ const action = {
 module.exports.workspaceActions = [action];
 module.exports.requestGroupActions = [action];
 module.exports.requestActions = [action];
-module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, makeKeyMatrix, makeMarkdown, parseExport, redactValue, summarize };
+module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, makeKeyMatrix, makeMarkdown, mergeSyntheticEnvironments, parseExport, promptedEnvironmentsFromText, redactValue, summarize };

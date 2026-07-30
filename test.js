@@ -49,6 +49,17 @@ async function main() {
   assert(fallbackTypes.has('single-env-prod-url'), 'single env catches prod-like URL');
   assert(t.makeKeyMatrix(built.raw).includes('base_url'), 'fallback key matrix has current env keys');
 
+
+  const pasted = '{"Dev":{"base_url":"https://api.production.example.com","api_key":"short","shared":"same"},"Prod":{"base_url":"https://api.dev.example.com","shared":"same","client_secret":""}}';
+  const prompted = t.promptedEnvironmentsFromText(pasted);
+  assert.strictEqual(prompted.length, 2, 'parses pasted two-env object');
+  const promptedRaw = t.mergeSyntheticEnvironments(emptyExport, prompted);
+  const promptedTypes = new Set(t.diffEnvironments(promptedRaw, { diagnostics: t.exportDiagnostics(emptyExport, t.parseExport(emptyExport)) }).map(f => f.type));
+  assert(promptedTypes.has('dev-points-to-prod'), 'pasted env catches dev prod URL');
+  assert(promptedTypes.has('prod-points-to-dev'), 'pasted env catches prod dev URL');
+  assert(promptedTypes.has('missing-key'), 'pasted env catches missing key');
+  assert(t.makeKeyMatrix(promptedRaw).includes('| base_url |'), 'pasted key matrix works');
+
   const clean = t.diffEnvironments(JSON.stringify({ resources: [{ _type: 'environment', name: 'Dev', data: { base_url: 'https://dev.example.com' } }, { _type: 'environment', name: 'Prod', data: { base_url: 'https://prod.example.com' } }] }));
   assert.strictEqual(t.summarize(clean).high, 0);
   const one = t.diffEnvironments(JSON.stringify({ resources: [{ _type: 'environment', name: 'Only', data: {} }] }));
@@ -64,6 +75,27 @@ async function main() {
       assert.strictEqual(c.alerts.length, 1);
     }
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+
+  const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'env-diff-prompt-'));
+  try {
+    const out = path.join(tmp2, 'prompt.md');
+    const prompts = [];
+    const c = {
+      alerts: [],
+      data: { export: { insomnia: async () => emptyExport } },
+      app: {
+        prompt: async (title, opts) => { prompts.push({ title, opts }); return pasted; },
+        showSaveDialog: async () => out,
+        alert: async (title, msg) => c.alerts.push({ title, msg }),
+      }
+    };
+    await plugin.requestActions[0].action(c, {});
+    const body = fs.readFileSync(out, 'utf8');
+    assert.strictEqual(prompts.length, 1, 'prompt shown for empty env export');
+    assert(body.includes('dev-points-to-prod'), 'prompt action report includes pasted findings');
+    assert(body.includes('## Key Matrix'), 'prompt action report includes matrix');
+  } finally { fs.rmSync(tmp2, { recursive: true, force: true }); }
+
   console.log('PASS: all tests');
 }
 main().catch(e => { console.error(e.stack || e); process.exit(1); });

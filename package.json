@@ -1,7 +1,7 @@
 {
   "name": "insomnia-plugin-env-diff",
-  "version": "1.0.2",
-  "description": "Desktop-aware local-only Insomnia environment diff reports with export diagnostics/current-environment fallback, key matrix, URL drift, and secret hygiene.",
+  "version": "1.0.3",
+  "description": "Desktop-validated local-only Insomnia environment diff reports with paste-JSON fallback, export diagnostics, key matrix, URL drift, and secret hygiene.",
   "main": "main.js",
   "license": "MIT",
   "author": "oliviajohns5",
@@ -36,7 +36,7 @@
   "insomnia": {
     "name": "env-diff",
     "displayName": "Env Diff",
-    "description": "Exports a local redacted report comparing Insomnia environments, with desktop export diagnostics/current-environment fallback, key matrix, URL drift, and secret hygiene.",
+    "description": "Exports a local redacted environment diff report with paste-JSON fallback when Insomnia Desktop does not expose environment resources.",
     "images": {
       "icon": "icon.svg",
       "cover": "cover.svg"

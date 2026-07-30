@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/insomnia-plugin-env-diff.svg)](https://www.npmjs.com/package/insomnia-plugin-env-diff)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Local-only environment comparison for Insomnia. v1.0.2 adds desktop export diagnostics and current-environment fallback when Insomnia does not expose environment resources from a menu action.
+Local-only environment comparison for Insomnia. v1.0.3 adds a desktop-safe paste-JSON fallback when Insomnia does not expose environment resources from a menu action.
 
 Env Diff exports a redacted Markdown report showing environment drift: missing keys, prod/dev URL mismatches, duplicate environment names, empty or short secret-like values, and suspicious same values across environments.
 
@@ -14,7 +14,7 @@ API teams often keep Base, Dev, Staging, and Production environments in one work
 ## Features
 
 - Adds a key matrix across all exposed environments
-- Adds desktop export diagnostics/current-environment fallback
+- Adds desktop export diagnostics and paste-JSON fallback
 - Compares all Insomnia environments in the workspace
 - Flags keys missing from one or more environments
 - Flags dev/staging environments pointing at production-like hosts
@@ -68,7 +68,7 @@ The action is exposed through `workspaceActions`, `requestGroupActions`, and `re
 
 ## Desktop validation notes
 
-In some Insomnia Desktop menu contexts, `context.data.export.insomnia()` may expose zero environment resources. Env Diff now reports `env-export-empty` and uses `context.request.getEnvironment()` as a current-environment fallback, so single-environment hygiene still works. Pairwise missing-key drift requires Insomnia to expose at least two environments.
+In some Insomnia Desktop menu contexts, `context.data.export.insomnia()` may expose zero environment resources. Env Diff now reports `env-export-empty` and prompts for pasted environment JSON when Insomnia does not expose environments. Paste either a single environment object or `{ "Dev": {...}, "Prod": {...} }` to run full pairwise diff locally.
 
 ## Privacy
 
