@@ -36,6 +36,19 @@ async function main() {
   assert(t.makeKeyMatrix(workspace).includes('missing'));
   assert(report.includes('| Severity | Type | Location | Message | Preview |'));
   assert(!report.includes('shortsecretlongvalue'));
+
+  const emptyExport = JSON.stringify({ resources: [] });
+  const fallbackContext = { request: { getEnvironment: () => ({ base_url: 'https://api.production.example.com', api_key: 'short', shared: 'same' }) } };
+  const built = t.buildActionExport(emptyExport, fallbackContext, {});
+  assert.strictEqual(built.usedFallback, true, 'uses current environment fallback');
+  const fallbackEnvFindings = t.diffEnvironments(built.raw, { diagnostics: built.diagnostics });
+  const fallbackTypes = new Set(fallbackEnvFindings.map(f => f.type));
+  assert(fallbackTypes.has('env-export-empty'), 'reports empty env export diagnostic');
+  assert(fallbackTypes.has('not-enough-environments'), 'reports single env limit');
+  assert(fallbackTypes.has('short-secret'), 'single env catches short secret');
+  assert(fallbackTypes.has('single-env-prod-url'), 'single env catches prod-like URL');
+  assert(t.makeKeyMatrix(built.raw).includes('base_url'), 'fallback key matrix has current env keys');
+
   const clean = t.diffEnvironments(JSON.stringify({ resources: [{ _type: 'environment', name: 'Dev', data: { base_url: 'https://dev.example.com' } }, { _type: 'environment', name: 'Prod', data: { base_url: 'https://prod.example.com' } }] }));
   assert.strictEqual(t.summarize(clean).high, 0);
   const one = t.diffEnvironments(JSON.stringify({ resources: [{ _type: 'environment', name: 'Only', data: {} }] }));

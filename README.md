@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/insomnia-plugin-env-diff.svg)](https://www.npmjs.com/package/insomnia-plugin-env-diff)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Local-only environment comparison for Insomnia. v1.0.1 adds a key matrix so missing environment variables are obvious at a glance.
+Local-only environment comparison for Insomnia. v1.0.2 adds desktop export diagnostics and current-environment fallback when Insomnia does not expose environment resources from a menu action.
 
 Env Diff exports a redacted Markdown report showing environment drift: missing keys, prod/dev URL mismatches, duplicate environment names, empty or short secret-like values, and suspicious same values across environments.
 
@@ -13,7 +13,8 @@ API teams often keep Base, Dev, Staging, and Production environments in one work
 
 ## Features
 
-- Adds a key matrix across all environments
+- Adds a key matrix across all exposed environments
+- Adds desktop export diagnostics/current-environment fallback
 - Compares all Insomnia environments in the workspace
 - Flags keys missing from one or more environments
 - Flags dev/staging environments pointing at production-like hosts
@@ -64,6 +65,10 @@ The action is exposed through `workspaceActions`, `requestGroupActions`, and `re
 |---|---|---|---|---|
 | high | dev-points-to-prod | Dev.base_url | Development/staging environment points at production-like host | Dev: api.production.example.com |
 ```
+
+## Desktop validation notes
+
+In some Insomnia Desktop menu contexts, `context.data.export.insomnia()` may expose zero environment resources. Env Diff now reports `env-export-empty` and uses `context.request.getEnvironment()` as a current-environment fallback, so single-environment hygiene still works. Pairwise missing-key drift requires Insomnia to expose at least two environments.
 
 ## Privacy
 

@@ -55,6 +55,50 @@ function collectEnvironments(parsed) {
   });
 }
 
+
+
+function exportDiagnostics(rawExport, parsed) {
+  const envs = collectEnvironments(parsed);
+  const topKeys = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed).slice(0, 12) : [];
+  return { bytes: safeString(rawExport).length, topKeys, environments: envs.length };
+}
+
+function currentEnvironmentFromContext(context) {
+  const req = context && context.request;
+  if (!req || typeof req.getEnvironment !== 'function') return null;
+  try {
+    const data = req.getEnvironment();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    return { _type: 'environment', name: 'Current Environment', data };
+  } catch { return null; }
+}
+
+function collectEnvironmentLikesFromModels(models) {
+  const found = [];
+  walk(models, (obj, path) => {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
+    if (isEnvironment(obj)) found.push({ obj, path: `models${path.slice(1)}` });
+  });
+  return found;
+}
+
+function buildActionExport(rawExport, context, models) {
+  const parsed = parseExport(rawExport);
+  const diagnostics = exportDiagnostics(rawExport, parsed);
+  const envs = collectEnvironments(parsed);
+  const synthetic = [];
+  if (!envs.length) {
+    const current = currentEnvironmentFromContext(context);
+    if (current) synthetic.push(current);
+    for (const item of collectEnvironmentLikesFromModels(models || {})) synthetic.push(item.obj);
+  }
+  if (!synthetic.length) return { raw: rawExport, diagnostics, usedFallback: false };
+  const merged = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.assign({}, parsed) : { originalExport: parsed };
+  const existing = Array.isArray(merged.resources) ? merged.resources : [];
+  merged.resources = existing.concat(synthetic);
+  return { raw: JSON.stringify(merged), diagnostics, usedFallback: true };
+}
+
 function redact(value) {
   const s = safeString(value);
   if (s.length <= 8) return '***';
@@ -73,13 +117,15 @@ function add(findings, severity, type, location, message, preview) {
   findings.push({ severity, type, location, message, preview: safeString(preview) });
 }
 
-function diffEnvironments(rawExport) {
+function diffEnvironments(rawExport, config) {
   const parsed = parseExport(rawExport);
   const envs = collectEnvironments(parsed);
   const findings = [];
+  if (config && config.diagnostics && config.diagnostics.environments === 0) {
+    add(findings, 'low', 'env-export-empty', 'context.data.export.insomnia', 'Insomnia did not expose environment resources from this menu action; current-environment fallback may be used', `exportBytes=${config.diagnostics.bytes}; parsedKeys=${config.diagnostics.topKeys.join(',') || 'none'}; fallback=current-environment`);
+  }
   if (envs.length < 2) {
-    add(findings, 'low', 'not-enough-environments', 'workspace.environments', 'Need at least two environments to compare', `${envs.length} found`);
-    return findings;
+    add(findings, 'low', 'not-enough-environments', 'workspace.environments', 'Need at least two environments for pairwise diff; single-environment hygiene checks still run', `${envs.length} found`);
   }
   const allKeys = new Set();
   for (const env of envs) Object.keys(env.flat).forEach(k => allKeys.add(k));
@@ -108,6 +154,7 @@ function diffEnvironments(rawExport) {
         if (value && !host && /^https?:/i.test(value) === false && value.includes('.')) add(findings, 'low', 'non-url-host', `${env.name}.${key}`, 'Host-like value is not a full URL', redactValue(key, value));
         if (DEV_RE.test(env.name) && host && PROD_RE.test(host)) add(findings, 'high', 'dev-points-to-prod', `${env.name}.${key}`, 'Development/staging environment points at production-like host', `${env.name}: ${host}`);
         if (PROD_RE.test(env.name) && host && DEV_RE.test(host)) add(findings, 'high', 'prod-points-to-dev', `${env.name}.${key}`, 'Production environment points at development-like host', `${env.name}: ${host}`);
+        if (envs.length === 1 && host && PROD_RE.test(host)) add(findings, 'medium', 'single-env-prod-url', `${env.name}.${key}`, 'Current/single environment points at production-like host', `${env.name}: ${host}`);
       }
     }
   }
@@ -154,9 +201,10 @@ async function getWritableExportPath(context, fileName) {
 const action = {
   label: 'Env Diff: Export Report',
   icon: 'fa-code-compare',
-  action: async (context) => {
+  action: async (context, models) => {
     const raw = await context.data.export.insomnia({ includePrivate: false, format: 'json' });
-    const report = makeMarkdown(diffEnvironments(raw), raw);
+    const built = buildActionExport(raw, context, models);
+    const report = makeMarkdown(diffEnvironments(built.raw, { diagnostics: built.diagnostics }), built.raw);
     const fs = require('fs');
     let output = null;
     if (context.app && typeof context.app.showSaveDialog === 'function') output = await context.app.showSaveDialog({ defaultPath: 'insomnia-env-diff.md' });
@@ -169,4 +217,4 @@ const action = {
 module.exports.workspaceActions = [action];
 module.exports.requestGroupActions = [action];
 module.exports.requestActions = [action];
-module.exports.__test = { collectEnvironments, diffEnvironments, flatten, getWritableExportPath, hostOf, makeKeyMatrix, makeMarkdown, parseExport, redactValue, summarize };
+module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, makeKeyMatrix, makeMarkdown, parseExport, redactValue, summarize };
