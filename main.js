@@ -223,6 +223,43 @@ function makeMarkdown(findings, rawExport) {
   return `# Insomnia Env Diff Report\n\nGenerated: ${new Date().toISOString()}\n\nLocal-only report. Secret-like values are redacted.\n\n## Summary\n\n- Compared keys: ${matrix ? matrix.split('\n').length - 2 : 0}\n- High: ${counts.high}\n- Medium: ${counts.medium}\n- Low: ${counts.low}\n\n## Key Matrix\n\n${matrix || 'No environment keys found.'}\n\n## Findings\n\n| Severity | Type | Location | Message | Preview |\n|---|---|---|---|---|\n${rows || '| low | none | workspace.environments | No environment drift detected. |  |'}\n`;
 }
 
+function makeJsonSidecar(findings, rawExport) {
+  const envs = collectEnvironments(parseExport(rawExport));
+  const keys = Array.from(new Set(envs.flatMap(e => Object.keys(e.flat)))).sort();
+  const severity = summarize(findings);
+  const typeCounts = findings.reduce((acc, f) => { acc[f.type] = (acc[f.type] || 0) + 1; return acc; }, {});
+  const matrix = keys.map(key => ({
+    key,
+    environments: Object.fromEntries(envs.map(env => [env.name, Object.prototype.hasOwnProperty.call(env.flat, key) ? 'present' : 'missing']))
+  }));
+  return {
+    schema: 'insomnia-env-diff/v1',
+    generatedAt: new Date().toISOString(),
+    summary: {
+      environmentsCompared: envs.length,
+      keysCompared: keys.length,
+      totalFindings: findings.length,
+      high: severity.high || 0,
+      medium: severity.medium || 0,
+      low: severity.low || 0,
+      typeCounts,
+    },
+    matrix,
+    findings: findings.map(f => ({
+      severity: f.severity,
+      type: f.type,
+      location: f.location,
+      message: f.message,
+      preview: f.preview,
+    })),
+  };
+}
+
+function jsonSidecarPath(markdownPath) {
+  const p = safeString(markdownPath);
+  return /\.md$/i.test(p) ? p.replace(/\.md$/i, '.json') : `${p}.json`;
+}
+
 async function getWritableExportPath(context, fileName) {
   const path = require('path');
   const candidates = [];
@@ -251,17 +288,21 @@ const action = {
       });
       reportRaw = mergeSyntheticEnvironments(reportRaw, promptedEnvironmentsFromText(pasted));
     }
-    const report = makeMarkdown(diffEnvironments(reportRaw, { diagnostics: built.diagnostics }), reportRaw);
+    const findings = diffEnvironments(reportRaw, { diagnostics: built.diagnostics });
+    const report = makeMarkdown(findings, reportRaw);
+    const jsonReport = makeJsonSidecar(findings, reportRaw);
     const fs = require('fs');
     let output = null;
     if (context.app && typeof context.app.showSaveDialog === 'function') output = await context.app.showSaveDialog({ defaultPath: 'insomnia-env-diff.md' });
     if (!output) output = await getWritableExportPath(context, 'insomnia-env-diff.md');
+    const jsonOutput = jsonSidecarPath(output);
     fs.writeFileSync(output, report, 'utf8');
-    if (context.app && typeof context.app.alert === 'function') await context.app.alert('Env Diff report exported', output);
+    fs.writeFileSync(jsonOutput, JSON.stringify(jsonReport, null, 2), 'utf8');
+    if (context.app && typeof context.app.alert === 'function') await context.app.alert('Env Diff report exported', `${output}\n${jsonOutput}`);
   }
 };
 
 module.exports.workspaceActions = [action];
 module.exports.requestGroupActions = [action];
 module.exports.requestActions = [action];
-module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, makeKeyMatrix, makeMarkdown, mergeSyntheticEnvironments, parseExport, promptedEnvironmentsFromText, redactValue, summarize };
+module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, jsonSidecarPath, makeJsonSidecar, makeKeyMatrix, makeMarkdown, mergeSyntheticEnvironments, parseExport, promptedEnvironmentsFromText, redactValue, summarize };

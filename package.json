@@ -1,7 +1,7 @@
 {
   "name": "insomnia-plugin-env-diff",
-  "version": "1.0.3",
-  "description": "Desktop-validated local-only Insomnia environment diff reports with paste-JSON fallback, export diagnostics, key matrix, URL drift, and secret hygiene.",
+  "version": "1.1.0",
+  "description": "Desktop-validated local-only Insomnia environment diff reports with Markdown plus JSON sidecar exports, paste-JSON fallback, export diagnostics, key matrix, URL drift, and secret hygiene.",
   "main": "main.js",
   "license": "MIT",
   "author": "oliviajohns5",
@@ -30,6 +30,7 @@
   ],
   "scripts": {
     "test": "node test.js",
+    "test:hard": "node hard-qa.js",
     "test:packaged": "node qa-packaged.js",
     "pack:dry": "npm pack --dry-run"
   },

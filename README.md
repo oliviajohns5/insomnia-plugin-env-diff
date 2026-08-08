@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/insomnia-plugin-env-diff.svg)](https://www.npmjs.com/package/insomnia-plugin-env-diff)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Local-only environment comparison for Insomnia. v1.0.3 adds a desktop-safe paste-JSON fallback when Insomnia does not expose environment resources from a menu action.
+Local-only environment comparison for Insomnia. v1.1.0 writes a redacted JSON sidecar next to every Markdown report for saved audits, diffing, and automation.
 
 Env Diff exports a redacted Markdown report showing environment drift: missing keys, prod/dev URL mismatches, duplicate environment names, empty or short secret-like values, and suspicious same values across environments.
 
@@ -15,6 +15,7 @@ API teams often keep Base, Dev, Staging, and Production environments in one work
 
 - Adds a key matrix across all exposed environments
 - Adds desktop export diagnostics and paste-JSON fallback
+- Writes a redacted JSON sidecar next to every Markdown report
 - Compares all Insomnia environments in the workspace
 - Flags keys missing from one or more environments
 - Flags dev/staging environments pointing at production-like hosts
@@ -49,6 +50,32 @@ Env Diff: Export Report
 ```
 
 The action is exposed through `workspaceActions`, `requestGroupActions`, and `requestActions`. In Insomnia 13 it may appear in the New Request dropdown.
+
+Each export writes two local files:
+
+```text
+insomnia-env-diff.md
+insomnia-env-diff.json
+```
+
+The JSON sidecar uses schema `insomnia-env-diff/v1` and includes:
+
+```json
+{
+  "schema": "insomnia-env-diff/v1",
+  "generatedAt": "...",
+  "summary": {
+    "environmentsCompared": 2,
+    "keysCompared": 5,
+    "totalFindings": 3,
+    "high": 1,
+    "medium": 1,
+    "low": 1
+  },
+  "matrix": [],
+  "findings": []
+}
+```
 
 ## Example report
 
@@ -85,6 +112,7 @@ In some Insomnia Desktop menu contexts, `context.data.export.insomnia()` may exp
 git clone https://github.com/oliviajohns5/insomnia-plugin-env-diff.git
 cd insomnia-plugin-env-diff
 npm test
+npm run test:hard
 npm run test:packaged
 npm pack --dry-run
 ```
@@ -93,9 +121,11 @@ npm pack --dry-run
 
 - `node --check main.js`
 - `node --check test.js`
+- `node --check hard-qa.js`
 - `node --check real-insomnia-packaged-test.js`
 - `node --check qa-packaged.js`
 - `npm test`
+- `npm run test:hard`
 - `npm run test:packaged`
 - `npm pack --dry-run`
 - isolated tarball install

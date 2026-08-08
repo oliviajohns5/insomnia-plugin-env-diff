@@ -71,6 +71,12 @@ async function main() {
       const c = ctx(out);
       await action.action(c);
       assert(fs.existsSync(out));
+      const jsonOut = out.replace(/\.md$/i, '.json');
+      assert(fs.existsSync(jsonOut), 'action writes JSON sidecar');
+      const sidecar = JSON.parse(fs.readFileSync(jsonOut, 'utf8'));
+      assert.strictEqual(sidecar.schema, 'insomnia-env-diff/v1');
+      assert(sidecar.summary.totalFindings > 0, 'sidecar has findings summary');
+      assert(Array.isArray(sidecar.findings), 'sidecar findings array');
       assert(fs.readFileSync(out, 'utf8').includes('Insomnia Env Diff Report'));
       assert.strictEqual(c.alerts.length, 1);
     }
@@ -91,6 +97,10 @@ async function main() {
     };
     await plugin.requestActions[0].action(c, {});
     const body = fs.readFileSync(out, 'utf8');
+    const jsonOut = out.replace(/\.md$/i, '.json');
+    assert(fs.existsSync(jsonOut), 'prompt action writes JSON sidecar');
+    const sidecar = JSON.parse(fs.readFileSync(jsonOut, 'utf8'));
+    assert(sidecar.findings.some(f => f.type === 'dev-points-to-prod'), 'sidecar includes pasted findings');
     assert.strictEqual(prompts.length, 1, 'prompt shown for empty env export');
     assert(body.includes('dev-points-to-prod'), 'prompt action report includes pasted findings');
     assert(body.includes('## Key Matrix'), 'prompt action report includes matrix');
