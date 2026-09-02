@@ -154,6 +154,12 @@ function add(findings, severity, type, location, message, preview) {
   findings.push({ severity, type, location, message, preview: safeString(preview) });
 }
 
+function valueShape(value) {
+  if (Array.isArray(value)) return 'array';
+  if (value === null) return 'null';
+  return typeof value;
+}
+
 function diffEnvironments(rawExport, config) {
   const parsed = parseExport(rawExport);
   const envs = collectEnvironments(parsed);
@@ -175,6 +181,15 @@ function diffEnvironments(rawExport, config) {
     const values = new Map();
     for (const env of present) values.set(safeString(env.flat[key]), (values.get(safeString(env.flat[key])) || []).concat(env.name));
     if (present.length > 1 && values.size === 1 && !SECRET_KEY_RE.test(key)) add(findings, 'low', 'same-value', key, 'Same non-secret value across environments', `${key}=${redactValue(key, present[0].flat[key])}`);
+
+    const shapes = new Map();
+    for (const env of present) {
+      const shape = valueShape(env.flat[key]);
+      shapes.set(shape, (shapes.get(shape) || []).concat(env.name));
+    }
+    if (present.length > 1 && shapes.size > 1) {
+      add(findings, 'medium', 'type-drift', key, 'Same key has different value types across environments', Array.from(shapes.entries()).map(([shape, names]) => `${shape}: ${names.join(', ')}`).join('; '));
+    }
 
     if (SECRET_KEY_RE.test(key)) {
       for (const env of present) {
@@ -305,4 +320,4 @@ const action = {
 module.exports.workspaceActions = [action];
 module.exports.requestGroupActions = [action];
 module.exports.requestActions = [action];
-module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, jsonSidecarPath, makeJsonSidecar, makeKeyMatrix, makeMarkdown, mergeSyntheticEnvironments, parseExport, promptedEnvironmentsFromText, redactValue, summarize };
+module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, jsonSidecarPath, makeJsonSidecar, makeKeyMatrix, makeMarkdown, mergeSyntheticEnvironments, parseExport, promptedEnvironmentsFromText, redactValue, summarize, valueShape };

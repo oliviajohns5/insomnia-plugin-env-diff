@@ -8,8 +8,8 @@ const plugin = require('./main');
 const t = plugin.__test;
 
 const workspace = JSON.stringify({ resources: [
-  { _type: 'environment', name: 'Dev', data: { base_url: 'https://api.production.example.com', api_key: 'short', shared: 'same', nested: { region: 'us' } } },
-  { _type: 'environment', name: 'Prod', data: { base_url: 'https://api.dev.example.com', shared: 'same', nested: { region: 'us' }, client_secret: '' } },
+  { _type: 'environment', name: 'Dev', data: { base_url: 'https://api.production.example.com', api_key: 'short', shared: 'same', nested: { region: 'us' }, feature_flag: true } },
+  { _type: 'environment', name: 'Prod', data: { base_url: 'https://api.dev.example.com', shared: 'same', nested: { region: 'us' }, feature_flag: 'true', client_secret: '' } },
   { _type: 'environment', name: 'Prod', data: { base_url: 'https://api.production.example.com', shared: 'same', extra: 'x' } }
 ] });
 
@@ -28,7 +28,7 @@ async function main() {
   assert.strictEqual(t.hostOf('https://api.example.com/x'), 'api.example.com');
   const findings = t.diffEnvironments(workspace);
   const types = new Set(findings.map(f => f.type));
-  for (const expected of ['missing-key', 'same-value', 'short-secret', 'empty-secret', 'dev-points-to-prod', 'prod-points-to-dev', 'duplicate-environment-name']) assert(types.has(expected), expected);
+  for (const expected of ['missing-key', 'same-value', 'type-drift', 'short-secret', 'empty-secret', 'dev-points-to-prod', 'prod-points-to-dev', 'duplicate-environment-name']) assert(types.has(expected), expected);
   const report = t.makeMarkdown(findings, workspace);
   assert(report.includes('# Insomnia Env Diff Report'));
   assert(report.includes('## Key Matrix'));

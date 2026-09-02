@@ -140,3 +140,9 @@ npm pack --dry-run
 ## License
 
 MIT
+
+## Changelog
+
+### 1.1.1
+
+- Adds type-drift detection for environment keys whose values change type across environments.
