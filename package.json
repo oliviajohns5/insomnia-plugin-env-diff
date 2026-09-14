@@ -1,6 +1,6 @@
 {
   "name": "insomnia-plugin-env-diff",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Desktop-validated local-only Insomnia environment diff reports with Markdown plus JSON sidecar exports, paste-JSON fallback, export diagnostics, key matrix, URL drift, and secret hygiene.",
   "main": "main.js",
   "license": "MIT",

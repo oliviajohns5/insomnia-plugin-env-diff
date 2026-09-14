@@ -39,13 +39,27 @@ async function run() {
     for (const expected of ['missing-key', 'same-value', 'short-secret', 'empty-secret', 'dev-points-to-prod', 'prod-points-to-dev', 'duplicate-environment-name']) assert(types.has(expected), expected);
   });
 
-  await check('markdown report is complete', () => {
+  await check('markdown report is complete and escaped', () => {
     const findings = t.diffEnvironments(workspace);
     const md = t.makeMarkdown(findings, workspace);
     assert(md.includes('# Insomnia Env Diff Report'));
     assert(md.includes('## Key Matrix'));
+    assert(md.includes('## Priority Fixes'));
     assert(md.includes('| Severity | Type | Location | Message | Preview |'));
     assert(!md.includes('undefined'));
+    const weirdRaw = JSON.stringify({ resources: [
+      { _type: 'environment', name: 'Dev|QA', data: { 'api|url': 'https://api.production.example.com' } },
+      { _type: 'environment', name: 'Prod\nLive', data: { 'api|url': 'https://api.dev.example.com' } }
+    ] });
+    const weirdFindings = t.diffEnvironments(weirdRaw);
+    weirdFindings.push({ severity: 'medium', type: 'manual|check', location: 'Dev|QA.api|url', message: 'message | pipe\nnewline', preview: 'preview | pipe\nnewline' });
+    const weirdMd = t.makeMarkdown(weirdFindings, weirdRaw);
+    assert(weirdMd.includes('Dev\\|QA'));
+    assert(weirdMd.includes('Prod<br>Live'));
+    assert(weirdMd.includes('api\\|url'));
+    assert(weirdMd.includes('manual\\|check'));
+    assert(weirdMd.includes('message \\| pipe<br>newline'));
+    assert(weirdMd.includes('preview \\| pipe<br>newline'));
   });
 
   await check('json sidecar schema and summary are complete', () => {
@@ -57,6 +71,9 @@ async function run() {
     assert(sidecar.summary.typeCounts['missing-key'] > 0);
     assert(Array.isArray(sidecar.matrix));
     assert(sidecar.matrix.some(row => row.key === 'base_url'));
+    assert(Array.isArray(sidecar.priority));
+    assert.strictEqual(sidecar.usedFallback, false);
+    assert.strictEqual(sidecar.sourceDiagnostics, null);
     assert(Array.isArray(sidecar.findings));
   });
 
@@ -94,7 +111,10 @@ async function run() {
         const jsonOut = out.replace(/\.md$/i, '.json');
         assert(fs.existsSync(out));
         assert(fs.existsSync(jsonOut));
-        assert(JSON.parse(fs.readFileSync(jsonOut, 'utf8')).summary.totalFindings > 0);
+        const sidecar = JSON.parse(fs.readFileSync(jsonOut, 'utf8'));
+        assert(sidecar.summary.totalFindings > 0);
+        assert.strictEqual(sidecar.usedFallback, false);
+        assert(sidecar.sourceDiagnostics && sidecar.sourceDiagnostics.environments === 3);
         assert.strictEqual(alerts.length, 1);
       }
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -109,6 +129,8 @@ async function run() {
       await plugin.requestActions[0].action(ctx, {});
       const sidecar = JSON.parse(fs.readFileSync(out.replace(/\.md$/i, '.json'), 'utf8'));
       assert(sidecar.findings.some(f => f.type === 'dev-points-to-prod'));
+      assert.strictEqual(sidecar.usedFallback, true);
+      assert(sidecar.sourceDiagnostics && sidecar.sourceDiagnostics.environments === 0);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 

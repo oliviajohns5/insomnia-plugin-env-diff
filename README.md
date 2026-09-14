@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/insomnia-plugin-env-diff.svg)](https://www.npmjs.com/package/insomnia-plugin-env-diff)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Local-only environment comparison for Insomnia. v1.1.0 writes a redacted JSON sidecar next to every Markdown report for saved audits, diffing, and automation.
+Local-only environment comparison for Insomnia. v1.1.2 hardens Markdown table escaping and records export diagnostics/fallback metadata in the JSON sidecar.
 
 Env Diff exports a redacted Markdown report showing environment drift: missing keys, prod/dev URL mismatches, duplicate environment names, empty or short secret-like values, and suspicious same values across environments.
 
@@ -13,6 +13,9 @@ API teams often keep Base, Dev, Staging, and Production environments in one work
 
 ## Features
 
+- Adds robust Markdown escaping for report table cells
+- Adds a priority fixes section for high/medium findings
+- Adds source diagnostics and fallback metadata to the JSON sidecar
 - Adds a key matrix across all exposed environments
 - Adds desktop export diagnostics and paste-JSON fallback
 - Writes a redacted JSON sidecar next to every Markdown report
@@ -64,6 +67,12 @@ The JSON sidecar uses schema `insomnia-env-diff/v1` and includes:
 {
   "schema": "insomnia-env-diff/v1",
   "generatedAt": "...",
+  "sourceDiagnostics": {
+    "bytes": 1234,
+    "topKeys": ["resources"],
+    "environments": 2
+  },
+  "usedFallback": false,
   "summary": {
     "environmentsCompared": 2,
     "keysCompared": 5,
@@ -72,6 +81,7 @@ The JSON sidecar uses schema `insomnia-env-diff/v1` and includes:
     "medium": 1,
     "low": 1
   },
+  "priority": [],
   "matrix": [],
   "findings": []
 }
@@ -142,6 +152,12 @@ npm pack --dry-run
 MIT
 
 ## Changelog
+
+### 1.1.2
+
+- Escapes Markdown table cells consistently for environment names, keys, finding types, locations, messages, and previews.
+- Adds a priority fixes section and JSON `priority` entries for top high/medium findings.
+- Adds JSON sidecar `sourceDiagnostics` and `usedFallback` metadata.
 
 ### 1.1.1
 

@@ -221,24 +221,47 @@ function summarize(findings) {
   return findings.reduce((acc, f) => { acc[f.severity] = (acc[f.severity] || 0) + 1; return acc; }, { high: 0, medium: 0, low: 0 });
 }
 
+function markdownCell(value) {
+  return safeString(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\r?\n/g, '<br>')
+    .trim();
+}
+
 function makeKeyMatrix(rawExport) {
   const envs = collectEnvironments(parseExport(rawExport));
   const keys = Array.from(new Set(envs.flatMap(e => Object.keys(e.flat)))).sort();
   if (!envs.length || !keys.length) return '';
-  const header = `| Key | ${envs.map(e => e.name).join(' | ')} |`;
+  const header = `| Key | ${envs.map(e => markdownCell(e.name)).join(' | ')} |`;
   const sep = `|---|${envs.map(() => '---').join('|')}|`;
-  const rows = keys.map(key => `| ${key.replace(/\|/g, '\\|')} | ${envs.map(e => Object.prototype.hasOwnProperty.call(e.flat, key) ? 'yes' : 'missing').join(' | ')} |`);
+  const rows = keys.map(key => `| ${markdownCell(key)} | ${envs.map(e => Object.prototype.hasOwnProperty.call(e.flat, key) ? 'yes' : 'missing').map(markdownCell).join(' | ')} |`);
   return [header, sep].concat(rows).join('\n');
+}
+
+function priorityFindings(findings) {
+  const rank = { high: 0, medium: 1, low: 2 };
+  return findings
+    .filter(f => f.severity === 'high' || f.severity === 'medium')
+    .slice()
+    .sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9) || safeString(a.type).localeCompare(safeString(b.type)))
+    .slice(0, 5);
+}
+
+function makePrioritySection(findings) {
+  const priority = priorityFindings(findings);
+  if (!priority.length) return 'No high or medium priority findings.';
+  return priority.map((f, i) => `${i + 1}. **${markdownCell(f.severity)} ${markdownCell(f.type)}** at \`${markdownCell(f.location)}\` — ${markdownCell(f.message)}`).join('\n');
 }
 
 function makeMarkdown(findings, rawExport) {
   const counts = summarize(findings);
-  const rows = findings.map(f => `| ${f.severity} | ${f.type} | ${f.location} | ${f.message} | ${String(f.preview).replace(/\|/g, '\\|')} |`).join('\n');
+  const rows = findings.map(f => `| ${markdownCell(f.severity)} | ${markdownCell(f.type)} | ${markdownCell(f.location)} | ${markdownCell(f.message)} | ${markdownCell(f.preview)} |`).join('\n');
   const matrix = rawExport ? makeKeyMatrix(rawExport) : '';
-  return `# Insomnia Env Diff Report\n\nGenerated: ${new Date().toISOString()}\n\nLocal-only report. Secret-like values are redacted.\n\n## Summary\n\n- Compared keys: ${matrix ? matrix.split('\n').length - 2 : 0}\n- High: ${counts.high}\n- Medium: ${counts.medium}\n- Low: ${counts.low}\n\n## Key Matrix\n\n${matrix || 'No environment keys found.'}\n\n## Findings\n\n| Severity | Type | Location | Message | Preview |\n|---|---|---|---|---|\n${rows || '| low | none | workspace.environments | No environment drift detected. |  |'}\n`;
+  return `# Insomnia Env Diff Report\n\nGenerated: ${new Date().toISOString()}\n\nLocal-only report. Secret-like values are redacted.\n\n## Summary\n\n- Compared keys: ${matrix ? matrix.split('\n').length - 2 : 0}\n- High: ${counts.high}\n- Medium: ${counts.medium}\n- Low: ${counts.low}\n\n## Priority Fixes\n\n${makePrioritySection(findings)}\n\n## Key Matrix\n\n${matrix || 'No environment keys found.'}\n\n## Findings\n\n| Severity | Type | Location | Message | Preview |\n|---|---|---|---|---|\n${rows || '| low | none | workspace.environments | No environment drift detected. |  |'}\n`;
 }
 
-function makeJsonSidecar(findings, rawExport) {
+function makeJsonSidecar(findings, rawExport, options = {}) {
   const envs = collectEnvironments(parseExport(rawExport));
   const keys = Array.from(new Set(envs.flatMap(e => Object.keys(e.flat)))).sort();
   const severity = summarize(findings);
@@ -250,6 +273,8 @@ function makeJsonSidecar(findings, rawExport) {
   return {
     schema: 'insomnia-env-diff/v1',
     generatedAt: new Date().toISOString(),
+    sourceDiagnostics: options.sourceDiagnostics || null,
+    usedFallback: Boolean(options.usedFallback),
     summary: {
       environmentsCompared: envs.length,
       keysCompared: keys.length,
@@ -259,6 +284,13 @@ function makeJsonSidecar(findings, rawExport) {
       low: severity.low || 0,
       typeCounts,
     },
+    priority: priorityFindings(findings).map(f => ({
+      severity: f.severity,
+      type: f.type,
+      location: f.location,
+      message: f.message,
+      preview: f.preview,
+    })),
     matrix,
     findings: findings.map(f => ({
       severity: f.severity,
@@ -294,6 +326,7 @@ const action = {
     const raw = await context.data.export.insomnia({ includePrivate: false, format: 'json' });
     const built = buildActionExport(raw, context, models);
     let reportRaw = built.raw;
+    let usedPromptFallback = false;
     if (!collectEnvironments(parseExport(reportRaw)).length && context.app && typeof context.app.prompt === 'function') {
       const pasted = await context.app.prompt('Env Diff: paste environment JSON', {
         label: 'Insomnia did not expose environments. Paste environment JSON or {"Dev":{...},"Prod":{...}} to diff. Leave blank to export diagnostics only.',
@@ -301,11 +334,13 @@ const action = {
         submitName: 'Use JSON',
         cancelable: true,
       });
-      reportRaw = mergeSyntheticEnvironments(reportRaw, promptedEnvironmentsFromText(pasted));
+      const prompted = promptedEnvironmentsFromText(pasted);
+      usedPromptFallback = prompted.length > 0;
+      reportRaw = mergeSyntheticEnvironments(reportRaw, prompted);
     }
     const findings = diffEnvironments(reportRaw, { diagnostics: built.diagnostics });
     const report = makeMarkdown(findings, reportRaw);
-    const jsonReport = makeJsonSidecar(findings, reportRaw);
+    const jsonReport = makeJsonSidecar(findings, reportRaw, { sourceDiagnostics: built.diagnostics, usedFallback: built.usedFallback || usedPromptFallback });
     const fs = require('fs');
     let output = null;
     if (context.app && typeof context.app.showSaveDialog === 'function') output = await context.app.showSaveDialog({ defaultPath: 'insomnia-env-diff.md' });
@@ -320,4 +355,4 @@ const action = {
 module.exports.workspaceActions = [action];
 module.exports.requestGroupActions = [action];
 module.exports.requestActions = [action];
-module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, jsonSidecarPath, makeJsonSidecar, makeKeyMatrix, makeMarkdown, mergeSyntheticEnvironments, parseExport, promptedEnvironmentsFromText, redactValue, summarize, valueShape };
+module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, jsonSidecarPath, makeJsonSidecar, makeKeyMatrix, makeMarkdown, makePrioritySection, markdownCell, mergeSyntheticEnvironments, parseExport, priorityFindings, promptedEnvironmentsFromText, redactValue, summarize, valueShape };

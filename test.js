@@ -34,8 +34,23 @@ async function main() {
   assert(report.includes('## Key Matrix'));
   assert(report.includes('| base_url |'));
   assert(t.makeKeyMatrix(workspace).includes('missing'));
-  assert(report.includes('| Severity | Type | Location | Message | Preview |'));
+  assert(report.includes('## Priority Fixes'));
   assert(!report.includes('shortsecretlongvalue'));
+
+  const pipeWorkspace = JSON.stringify({ resources: [
+    { _type: 'environment', name: 'Dev|East', data: { 'base|url': 'https://api.production.example.com', shared: 'same' } },
+    { _type: 'environment', name: 'Prod\nWest', data: { 'base|url': 'https://api.dev.example.com', shared: 'same' } }
+  ] });
+  const pipeFindings = t.diffEnvironments(pipeWorkspace);
+  pipeFindings.push({ severity: 'medium', type: 'custom|type', location: 'Dev|East.base|url', message: 'line one\nline | two', preview: 'preview | value\nnext' });
+  const pipeReport = t.makeMarkdown(pipeFindings, pipeWorkspace);
+  assert(pipeReport.includes('Dev\\|East'), 'escapes env name pipes in matrix header');
+  assert(pipeReport.includes('Prod<br>West'), 'escapes env name newlines in matrix header');
+  assert(pipeReport.includes('base\\|url'), 'escapes key/location pipes');
+  assert(pipeReport.includes('custom\\|type'), 'escapes finding type pipes');
+  assert(pipeReport.includes('line one<br>line \\| two'), 'escapes finding message pipes and newlines');
+  assert(pipeReport.includes('preview \\| value<br>next'), 'escapes preview pipes and newlines');
+  assert.strictEqual(t.markdownCell(' a|b\nc '), 'a\\|b<br>c');
 
   const emptyExport = JSON.stringify({ resources: [] });
   const fallbackContext = { request: { getEnvironment: () => ({ base_url: 'https://api.production.example.com', api_key: 'short', shared: 'same' }) } };
@@ -77,6 +92,9 @@ async function main() {
       assert.strictEqual(sidecar.schema, 'insomnia-env-diff/v1');
       assert(sidecar.summary.totalFindings > 0, 'sidecar has findings summary');
       assert(Array.isArray(sidecar.findings), 'sidecar findings array');
+      assert.strictEqual(sidecar.usedFallback, false, 'sidecar records fallback metadata');
+      assert(sidecar.sourceDiagnostics && sidecar.sourceDiagnostics.environments === 3, 'sidecar records source diagnostics');
+      assert(Array.isArray(sidecar.priority), 'sidecar includes priority list');
       assert(fs.readFileSync(out, 'utf8').includes('Insomnia Env Diff Report'));
       assert.strictEqual(c.alerts.length, 1);
     }
@@ -101,6 +119,8 @@ async function main() {
     assert(fs.existsSync(jsonOut), 'prompt action writes JSON sidecar');
     const sidecar = JSON.parse(fs.readFileSync(jsonOut, 'utf8'));
     assert(sidecar.findings.some(f => f.type === 'dev-points-to-prod'), 'sidecar includes pasted findings');
+    assert.strictEqual(sidecar.usedFallback, true, 'prompted pasted envs set fallback metadata');
+    assert(sidecar.sourceDiagnostics && sidecar.sourceDiagnostics.environments === 0, 'prompted sidecar keeps empty export diagnostics');
     assert.strictEqual(prompts.length, 1, 'prompt shown for empty env export');
     assert(body.includes('dev-points-to-prod'), 'prompt action report includes pasted findings');
     assert(body.includes('## Key Matrix'), 'prompt action report includes matrix');
