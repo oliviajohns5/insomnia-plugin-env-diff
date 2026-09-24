@@ -74,6 +74,9 @@ async function main() {
   assert(promptedTypes.has('prod-points-to-dev'), 'pasted env catches prod dev URL');
   assert(promptedTypes.has('missing-key'), 'pasted env catches missing key');
   assert(t.makeKeyMatrix(promptedRaw).includes('| base_url |'), 'pasted key matrix works');
+  assert.strictEqual(t.normalizeSaveDialogResult('/tmp/report.md'), '/tmp/report.md');
+  assert.strictEqual(t.normalizeSaveDialogResult({ filePath: '/tmp/report.md', canceled: false }), '/tmp/report.md');
+  assert.strictEqual(t.normalizeSaveDialogResult({ canceled: true }), null);
 
   const clean = t.diffEnvironments(JSON.stringify({ resources: [{ _type: 'environment', name: 'Dev', data: { base_url: 'https://dev.example.com' } }, { _type: 'environment', name: 'Prod', data: { base_url: 'https://prod.example.com' } }] }));
   assert.strictEqual(t.summarize(clean).high, 0);
@@ -98,6 +101,10 @@ async function main() {
       assert(fs.readFileSync(out, 'utf8').includes('Insomnia Env Diff Report'));
       assert.strictEqual(c.alerts.length, 1);
     }
+    const objectOut = path.join(tmp, 'object.md');
+    await plugin.requestActions[0].action({ ...ctx({ filePath: objectOut, canceled: false }) }, {});
+    assert(fs.existsSync(objectOut), 'object save dialog writes Markdown');
+    assert(fs.existsSync(objectOut.replace(/\.md$/i, '.json')), 'object save dialog writes JSON sidecar');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 
   const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'env-diff-prompt-'));

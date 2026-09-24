@@ -153,6 +153,11 @@ MIT
 
 ## Changelog
 
+### 1.1.3
+
+- Report export now supports Electron-style save dialog results and still writes the JSON sidecar.
+
+
 ### 1.1.2
 
 - Escapes Markdown table cells consistently for environment names, keys, finding types, locations, messages, and previews.

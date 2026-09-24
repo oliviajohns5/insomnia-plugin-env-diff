@@ -307,6 +307,18 @@ function jsonSidecarPath(markdownPath) {
   return /\.md$/i.test(p) ? p.replace(/\.md$/i, '.json') : `${p}.json`;
 }
 
+
+function normalizeSaveDialogResult(result) {
+  if (!result) return null;
+  if (typeof result === 'string') return result;
+  if (typeof result === 'object') {
+    if (result.canceled) return null;
+    if (typeof result.filePath === 'string' && result.filePath) return result.filePath;
+    if (typeof result.path === 'string' && result.path) return result.path;
+  }
+  return null;
+}
+
 async function getWritableExportPath(context, fileName) {
   const path = require('path');
   const candidates = [];
@@ -343,7 +355,7 @@ const action = {
     const jsonReport = makeJsonSidecar(findings, reportRaw, { sourceDiagnostics: built.diagnostics, usedFallback: built.usedFallback || usedPromptFallback });
     const fs = require('fs');
     let output = null;
-    if (context.app && typeof context.app.showSaveDialog === 'function') output = await context.app.showSaveDialog({ defaultPath: 'insomnia-env-diff.md' });
+    if (context.app && typeof context.app.showSaveDialog === 'function') output = normalizeSaveDialogResult(await context.app.showSaveDialog({ defaultPath: 'insomnia-env-diff.md' }));
     if (!output) output = await getWritableExportPath(context, 'insomnia-env-diff.md');
     const jsonOutput = jsonSidecarPath(output);
     fs.writeFileSync(output, report, 'utf8');
@@ -355,4 +367,4 @@ const action = {
 module.exports.workspaceActions = [action];
 module.exports.requestGroupActions = [action];
 module.exports.requestActions = [action];
-module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, jsonSidecarPath, makeJsonSidecar, makeKeyMatrix, makeMarkdown, makePrioritySection, markdownCell, mergeSyntheticEnvironments, parseExport, priorityFindings, promptedEnvironmentsFromText, redactValue, summarize, valueShape };
+module.exports.__test = { buildActionExport, collectEnvironments, collectEnvironmentLikesFromModels, currentEnvironmentFromContext, diffEnvironments, exportDiagnostics, flatten, getWritableExportPath, hostOf, jsonSidecarPath, normalizeSaveDialogResult, makeJsonSidecar, makeKeyMatrix, makeMarkdown, makePrioritySection, markdownCell, mergeSyntheticEnvironments, parseExport, priorityFindings, promptedEnvironmentsFromText, redactValue, summarize, valueShape };
