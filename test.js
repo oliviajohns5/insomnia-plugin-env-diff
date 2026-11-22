@@ -37,6 +37,55 @@ async function main() {
   assert(report.includes('## Priority Fixes'));
   assert(!report.includes('shortsecretlongvalue'));
 
+  // Synthetic fixture, not a credential: exercise both root and nested header keys.
+  const bearer = 'Bearer fixture-only-not-a-credential-12345';
+  const authWorkspace = JSON.stringify({ resources: ['Dev', 'Prod'].map(name => ({
+    _type: 'environment', name, data: { Authorization: bearer, headers: { Authorization: bearer }, shared: 'safe' }
+  })) });
+  const authFindings = t.diffEnvironments(authWorkspace);
+  assert(!authFindings.some(f => f.type === 'same-value' && /Authorization$/i.test(f.location)), 'Authorization must not be a same-value finding');
+  assert(authFindings.some(f => f.type === 'same-value' && f.location === 'shared'), 'ordinary same values remain visible');
+  const authTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'env-diff-auth-'));
+  try {
+    const out = path.join(authTmp, 'report.md');
+    await plugin.workspaceActions[0].action({ data: { export: { insomnia: async () => authWorkspace } }, app: { showSaveDialog: async () => out } });
+    for (const file of [out, out.replace(/\.md$/, '.json')]) {
+      assert(!fs.readFileSync(file, 'utf8').includes(bearer), `${path.extname(file)} must not export bearer value`);
+    }
+  } finally { fs.rmSync(authTmp, { recursive: true, force: true }); }
+  assert.strictEqual(t.redactValue('Authorization', bearer), '***', 'credential headers must not expose even a token prefix/suffix');
+  assert.strictEqual(t.redactValue('headers.authorization', 'Bearer x'), '***', 'nested, case-insensitive Authorization is masked');
+  const shortAuth = JSON.stringify({ resources: [{ _type: 'environment', name: 'Dev', data: { Authorization: 'Bearer x' } }] });
+  assert(t.diffEnvironments(shortAuth).some(f => f.type === 'short-secret' && f.preview === 'Dev: ***'), 'short Authorization preview must be masked');
+  assert.strictEqual(t.redactValue('documentationAuthorizationNote', 'public'), 'public', 'unrelated keys retain ordinary previews');
+
+  // Nested objects and arrays must not export credential values after flattening.
+  const objectFixture = 'Bearer fixture-object-xyz-not-a-credential';
+  const arrayFixture = 'Bearer fixture-array-xyz-not-a-credential';
+  const hostFixture = 'fixture-production.example.invalid';
+  const nestedAuthWorkspace = JSON.stringify({ resources: ['Dev', 'Prod'].map(name => ({
+    _type: 'environment', name, data: {
+      headers: { aUtHoRiZaTiOn: { value: objectFixture, details: { raw: objectFixture }, endpoint: `https://${hostFixture}` } },
+      Authorization: [arrayFixture, { value: arrayFixture }],
+      documentationAuthorizationNote: 'public-note'
+    }
+  })) });
+  const nestedFindings = t.diffEnvironments(nestedAuthWorkspace);
+  assert(!nestedFindings.some(f => f.type === 'same-value' && /(?:^|\.)authorization(?:\.|$)/i.test(f.location)), 'Authorization descendants must not create same-value previews');
+  assert(nestedFindings.some(f => f.type === 'same-value' && f.location === 'documentationAuthorizationNote' && f.preview.includes('public-note')), 'unrelated key still has an ordinary preview');
+  const nestedTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'env-diff-nested-auth-'));
+  try {
+    const out = path.join(nestedTmp, 'report.md');
+    await plugin.workspaceActions[0].action({ data: { export: { insomnia: async () => nestedAuthWorkspace } }, app: { showSaveDialog: async () => out } });
+    for (const file of [out, out.replace(/\.md$/, '.json')]) {
+      const body = fs.readFileSync(file, 'utf8');
+      for (const fixture of [objectFixture, arrayFixture, hostFixture]) {
+        assert(!body.includes(fixture), `${path.extname(file)} must not export nested Authorization fixture`);
+      }
+      assert(body.includes('public-note'), `${path.extname(file)} retains unrelated value`);
+    }
+  } finally { fs.rmSync(nestedTmp, { recursive: true, force: true }); }
+
   const pipeWorkspace = JSON.stringify({ resources: [
     { _type: 'environment', name: 'Dev|East', data: { 'base|url': 'https://api.production.example.com', shared: 'same' } },
     { _type: 'environment', name: 'Prod\nWest', data: { 'base|url': 'https://api.dev.example.com', shared: 'same' } }

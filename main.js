@@ -1,6 +1,7 @@
 'use strict';
 
 const SECRET_KEY_RE = /(?:secret|token|password|passwd|api[_-]?key|client[_-]?secret|private[_-]?key)/i;
+const AUTHORIZATION_KEY_RE = /(?:^|\.)authorization(?:\.|$)/i;
 const URL_KEY_RE = /(?:url|host|endpoint|base)/i;
 const PROD_RE = /(^|[-.])(prod|production|live)([-.]|$)|prod|production|live/i;
 const DEV_RE = /(dev|local|test|sandbox|staging|stage)/i;
@@ -143,7 +144,7 @@ function redact(value) {
 }
 
 function redactValue(key, value) {
-  return SECRET_KEY_RE.test(key) ? redact(value) : safeString(value).slice(0, 160);
+  return AUTHORIZATION_KEY_RE.test(key) ? '***' : SECRET_KEY_RE.test(key) ? redact(value) : safeString(value).slice(0, 160);
 }
 
 function hostOf(value) {
@@ -180,7 +181,7 @@ function diffEnvironments(rawExport, config) {
 
     const values = new Map();
     for (const env of present) values.set(safeString(env.flat[key]), (values.get(safeString(env.flat[key])) || []).concat(env.name));
-    if (present.length > 1 && values.size === 1 && !SECRET_KEY_RE.test(key)) add(findings, 'low', 'same-value', key, 'Same non-secret value across environments', `${key}=${redactValue(key, present[0].flat[key])}`);
+    if (present.length > 1 && values.size === 1 && !SECRET_KEY_RE.test(key) && !AUTHORIZATION_KEY_RE.test(key)) add(findings, 'low', 'same-value', key, 'Same non-secret value across environments', `${key}=${redactValue(key, present[0].flat[key])}`);
 
     const shapes = new Map();
     for (const env of present) {
@@ -191,15 +192,15 @@ function diffEnvironments(rawExport, config) {
       add(findings, 'medium', 'type-drift', key, 'Same key has different value types across environments', Array.from(shapes.entries()).map(([shape, names]) => `${shape}: ${names.join(', ')}`).join('; '));
     }
 
-    if (SECRET_KEY_RE.test(key)) {
+    if (SECRET_KEY_RE.test(key) || AUTHORIZATION_KEY_RE.test(key)) {
       for (const env of present) {
         const v = safeString(env.flat[key]);
         if (!v) add(findings, 'medium', 'empty-secret', `${env.name}.${key}`, 'Secret-like key is empty', env.name);
-        else if (v.length < 12) add(findings, 'low', 'short-secret', `${env.name}.${key}`, 'Secret-like key value is short', `${env.name}: ${redact(v)}`);
+        else if (v.length < 12) add(findings, 'low', 'short-secret', `${env.name}.${key}`, 'Secret-like key value is short', `${env.name}: ${redactValue(key, v)}`);
       }
     }
 
-    if (URL_KEY_RE.test(key)) {
+    if (!AUTHORIZATION_KEY_RE.test(key) && URL_KEY_RE.test(key)) {
       for (const env of present) {
         const value = safeString(env.flat[key]);
         const host = hostOf(value);
